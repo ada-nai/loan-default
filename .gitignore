@@ -1,2 +1,5 @@
 /subs/*
 /.ipynb_checkpoints/*
+ecr.json
+logs/
+aws_walkthrough.txt

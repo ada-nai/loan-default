@@ -1,6 +1,3 @@
-import os
-
-import math
 import numpy as np
 import pandas as pd
 import sklearn
@@ -25,18 +22,34 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 def std_col_names(df):
     """
     - Convert feature names to lower case
-    - Rename reporting date column
+    - Rename columns: {employment_duration, debit_to_income, home_ownership}
+
+    input
+        df -> provided dataframe
+
+    output
+        df -> formatted DF
     """
     df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
     df.rename(columns = {'employment_duration': 'property', 'debit_to_income': 'debt_to_income', 'home_ownership': 'emp_duration'}, inplace= True)
     df['loan_title'] = df['loan_title'].str.lower().str.strip().str.replace(' ', '_')
     return df
 
-# def process_data(df, dv)
-
 def transform_dv(df, dv=None, train= False):
     """
     DictVectorize a dataframe
+
+    input
+        df -> DataFrame to be vectorized
+        dv -> DictVectorizer object. To be provided only if train= False
+        (for validation set, provide DV of the corresponding train set)
+        train -> If the set is train or # NOTE:
+
+    output
+        df_dict -> dict equivalent of DF
+        dv -> DictVectorizer object
+        train_dv -> DictVectorized train data
+        val_dv -> DictVectorized validation data
     """
     df_dict = df.to_dict(orient= 'records')
 
@@ -84,35 +97,31 @@ def main():
     'initial_list_status',
     ]
 
+    # Fetch train data
     df = std_col_names(pd.read_csv('./data/train.csv'))
     logging.info('Dataset loaded')
     y_count = df['loan_status'].value_counts()
     logging.info(f'Dataset label value counts:\n{y_count}')
 
+    # Add new feature
     df['bal_acc'] = df['total_accounts']-df['open_account']
     train = df.copy()
     logging.info(f'Sample: ')
     logging.info(train.columns)
 
-    # train_dict = train.to_dict(orient= 'records')
-    # logging.info('Data processed into dictionary')
 
-    # instantiate DictVectorizer
-    # dv = DictVectorizer(sparse= False)
-    # train_dv = dv.fit_transform(train_dict)
-    # logging.info('Data transformed using DictVectorizer')
     train_dict, dv, train_dv = transform_dv(train[skim_num_cols+cat_cols], train= True)
 
+    # Balance out the data
     over = SMOTE(sampling_strategy=0.25)
     x_over, y_over = over.fit_resample(train_dv, df['loan_status'])
-
     under = RandomUnderSampler(sampling_strategy= 0.5)
     x_ou, y_ou = under.fit_resample(x_over, y_over)
     y_ou_count = pd.Series(y_ou).value_counts()
     logging.info(f'Dataset label value counts:\n{y_ou_count}')
 
 
-    # instantiate model
+    # instantiate model with tuned parameters
     fin_params = {
     'base_score':0.5, 'booster':'gbtree', 'colsample_bylevel':1,
       'colsample_bynode':1, 'colsample_bytree':1, 'enable_categorical':False,
@@ -127,8 +136,6 @@ def main():
     }
 
     dtrain = xgb.DMatrix(x_ou, y_ou)
-    # rf_tuned = RandomForestRegressor(ccp_alpha=0.05, max_depth=15, max_features=5,
-    #                   max_samples=0.5, n_estimators=200)
     logging.info('Training Model')
 
     # fit model to transformed train data

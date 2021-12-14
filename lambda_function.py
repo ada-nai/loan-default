@@ -1,6 +1,4 @@
-# import packages
 import pickle
-# from flask import jsonify
 
 import pandas as pd
 import numpy as np
@@ -23,9 +21,16 @@ def transform_data(data):
     """
     Fetch request json
     Transform Data
-    Make predictions
-    Return predictions as json
+
+    input
+        data -> input received from requests
+
+    output
+        dtest -> XGB DMatrix
+        df['id'] -> Series of loan applicant IDs
     """
+
+    # model feature columns
     skim_num_cols = [
     'revolving_utilities',
     'total_received_interest',
@@ -53,22 +58,31 @@ def transform_data(data):
     'initial_list_status',
     ]
 
-    # fetch requests made to endpoint
-    # loan_details = request.get_json()
+    # Fetch requests made to endpoint and convert to DataFrame
 
     df = pd.DataFrame.from_dict(data).reset_index(drop= True)
 
+    # Add new feature 'bal_acc'
     df['bal_acc'] =  df['total_accounts']-df['open_account']
 
+    # Transform to DMatrix
     loan_dict = df[skim_num_cols+cat_cols].to_dict(orient= 'records')
-
     X = dv.transform(loan_dict)
     dtest = xgb.DMatrix(X)
 
     return dtest, df['id']
 
 def predict(dmat, ids):
+    """
+    Makes prediction and aggregates result
 
+    input
+        dmat -> DMatrix to be input to model
+        ids -> Applicant IDs for which predictions are being max_depth
+
+    output
+        result -> Dictionary with value `IDs: output::probability of default`
+    """
     y_pred = model.predict(dmat)
     op = [f'Non-default:{val}' if val < 0.35 else f'Default::{round(val, 2)}' for val in y_pred]
     application_ids = [sample for sample in ids]
@@ -80,6 +94,9 @@ def predict(dmat, ids):
     return result
 
 def lambda_handler(event, context=None):
+    """
+    Aggregation of operations for the lambda function and return output
+    """
     loan_details = event['records']
     X, ids = transform_data(loan_details)
     op = predict(X, ids)
